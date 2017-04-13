@@ -18,6 +18,15 @@ def load_and_preprocess():
         data.loc[home_idx,'HomeTeam'] = i
         data.loc[away_idx,'AwayTeam'] = i
     data[['HomeTeam','AwayTeam']] = data[['HomeTeam','AwayTeam']].apply(pd.to_numeric)
+
+    #add a 'round' column by grouping by week
+    data = data.set_index('Date')
+    data.index = pd.to_datetime(data.index)
+    data['Gameweek'] = data.index.year * 100 + data.index.week
+    data['Gameweek'] = data['Gameweek'].diff(1).fillna(1.)
+    data.loc[data['Gameweek'] != 0, 'Gameweek'] = 1.
+    data['Gameweek'] = data['Gameweek'].cumsum().astype(int)
+
     return data,teams
 
 def log_likelihood(params,data,n_teams=20):
@@ -75,7 +84,10 @@ def jacobian(params,data,n_teams=20):
 
     return -derivs
 
-def compute_parameters(params_guess,data,n_teams=20):
+def compute_parameters(data,params_guess=None,n_teams=20):
+
+    if params_guess is None:
+        params_guess = np.ones(2*n_teams)
 
     cons = ({'type': 'ineq', 'fun': lambda x:  n_teams - np.sum(x[: n_teams - 1]) })
 
@@ -95,3 +107,28 @@ def compute_parameters(params_guess,data,n_teams=20):
     gamma = res.x[-1]
 
     return alphas,betas,gamma
+
+
+def fit_model_up_to_round(data,gameweek=1):
+
+    params = np.ones(40)
+    if gameweek<10:
+        train = data.loc[data['Gameweek'] <= gameweek, :]
+    else:
+        train = data.loc[(data['Gameweek'] <= gameweek)&(data['Gameweek'] > gameweek - 10)]
+    alphas,betas,gamma = compute_parameters(train,params_guess=params,n_teams=20)
+    return alphas,betas,gamma
+
+def fit_model_season(data):
+
+    alpha_tot = np.zeros((62,20))
+    beta_tot = np.zeros((62,20))
+    gamma_tot = np.zeros(62)
+
+    for i in np.arange(1,63):
+        if i==1:
+            alpha_tot[0,:],beta_tot[0,:],gamma_tot[0] = fit_model_up_to_round(data)
+        else:
+            alpha_tot[i-1,:],beta_tot[i-1,:],gamma_tot[i-1] = fit_model_up_to_round(data,gameweek=i)
+
+    return alpha_tot,beta_tot,gamma_tot
