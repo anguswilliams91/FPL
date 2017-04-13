@@ -8,8 +8,6 @@ sns.set_style()
 
 from scipy.optimize import minimize
 
-n_teams = 20
-
 def load_and_preprocess():
 
     data = pd.read_csv("data/PL_2015-16.csv")
@@ -22,16 +20,11 @@ def load_and_preprocess():
     data[['HomeTeam','AwayTeam']] = data[['HomeTeam','AwayTeam']].apply(pd.to_numeric)
     return data,teams
 
-def log_likelihood(params,data):
+def log_likelihood(params,data,n_teams=20):
 
-    alphas = params[:19]
-    betas = params[19:39]
+    alphas = params[: n_teams-1 ]
+    betas = params[n_teams-1 : 2*n_teams - 1]
     gamma = params[-1]
-
-    print(params)
-
-
-    #final alpha is determined by constraint that they sum to n_teams
     alphas = np.append(alphas,n_teams-np.sum(alphas))
 
     alpha_ik = alphas[data['HomeTeam'].values]
@@ -46,14 +39,12 @@ def log_likelihood(params,data):
     mu_k = alpha_jk * beta_ik
     lambda_k = alpha_ik * beta_jk * gamma
 
-    print(-np.sum( -mu_k + y_k*np.log(mu_k) - lambda_k + x_k*np.log(lambda_k) ))
-
     return -np.sum( -mu_k + y_k*np.log(mu_k) - lambda_k + x_k*np.log(lambda_k) )
 
-def jacobian(params,data):
+def jacobian(params,data,n_teams=20):
 
-    alphas = params[:19]
-    betas = params[19:39]
+    alphas = params[: n_teams-1 ]
+    betas = params[n_teams-1 : 2*n_teams - 1]
     gamma = params[-1]
     alphas = np.append(alphas,n_teams-np.sum(alphas))
 
@@ -70,25 +61,37 @@ def jacobian(params,data):
 
     deriv_alphas = np.zeros(n_teams-1)
     deriv_betas = np.zeros(n_teams)
-    for i in np.arange(n_teams-1):
-        deriv_alphas[i] = np.sum(((y_k/mu_k - 1)*beta_ik)[data['AwayTeam'].values == i])\
-                          + np.sum(((x_k/lambda_k - 1)*beta_jk*gamma)[data['HomeTeam'].values == i])
-        deriv_betas[i] = np.sum(((y_k/mu_k - 1)*alpha_jk)[data['HomeTeam'].values == i])\
-                          + np.sum(((x_k/lambda_k - 1)*alpha_ik*gamma)[data['AwayTeam'].values == i])
+    for i in np.arange(n_teams - 1):
+        deriv_alphas[i] = np.sum( (gamma*beta_jk*(x_k/lambda_k - 1.))[data['HomeTeam'].values == i] ) +\
+                            np.sum( (beta_ik*(y_k/mu_k - 1.))[data['AwayTeam'].values == i] )
+        deriv_betas[i] = np.sum( (gamma*alpha_ik*(x_k/lambda_k - 1.))[data['AwayTeam'].values == i] ) +\
+                            np.sum( (alpha_jk*(y_k/mu_k - 1.))[data['HomeTeam'].values == i] )
 
-    deriv_betas[-1] = np.sum(((y_k/mu_k - 1)*alpha_jk)[data['HomeTeam'].values == n_teams-1])\
-                          + np.sum(((x_k/lambda_k - 1)*alpha_ik*gamma)[data['AwayTeam'].values == n_teams-1])
-
-    deriv_gamma = np.sum( -alpha_ik*beta_jk*(x_k/lambda_k - 1.) )
+    deriv_betas[-1] = np.sum( (gamma*alpha_ik*(x_k/lambda_k - 1.))[data['AwayTeam'].values == n_teams - 1] ) +\
+                            np.sum( (alpha_jk*(y_k/mu_k - 1.))[data['HomeTeam'].values == n_teams - 1] )
+    deriv_gamma = np.sum( (x_k/lambda_k - 1.)*alpha_ik*beta_jk )
     derivs = np.hstack((deriv_alphas,deriv_betas))
     derivs = np.append(derivs,deriv_gamma)
 
-    return -derivs 
+    return -derivs
 
-def compute_parameters(params_guess,data):
+def compute_parameters(params_guess,data,n_teams=20):
 
-    cons = ({'type': 'ineq', 'fun': lambda x:  20. - np.sum(x[:19]) })
+    cons = ({'type': 'ineq', 'fun': lambda x:  n_teams - np.sum(x[: n_teams - 1]) })
 
-    bnds = ((0.,None),)*40
+    bnds = ((0.,None),)*2*n_teams
 
-    return minimize(log_likelihood, params_guess, args=data, jac=jacobian, method='SLSQP', bounds=bnds, constraints=cons, options={'maxiter': 2})
+    res = minimize(log_likelihood, params_guess, args=data, jac=jacobian, \
+            method='SLSQP', bounds=bnds, constraints=cons, options={'maxiter': 200})
+
+    if res.success != True:
+        print('Failed to optimize the model.')
+        return res
+
+    alphas = res.x[:n_teams - 1]
+    alphas = np.append(alphas, n_teams - np.sum(alphas))
+
+    betas = res.x[n_teams - 1 : 2*n_teams - 1]
+    gamma = res.x[-1]
+
+    return alphas,betas,gamma
