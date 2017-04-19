@@ -322,12 +322,12 @@ def compute_parameters(data,params_guess=None,n_teams=20,date=None,zeta=0.003):
     return alphas,betas,gamma,rho
 
 
-def fit_model_up_to_round(data,gameweek=1):
+def fit_model_up_to_round(data,gameweek=1,window=10):
 
     """
     Fit the model up to a given 'round', defined by the Gameweek column 
     in the data file. Instead of using exp(-zeta * t), a simple sliding 
-    window function is used where the ten previous gameweeks are considered.
+    window function is used where the twenty previous gameweeks are considered.
 
     Arguments
     ---------
@@ -338,6 +338,9 @@ def fit_model_up_to_round(data,gameweek=1):
     gameweek: (=1) int
         The gameweek (1<= gameweek <= 36) up to which the model should be fit. Only the ten 
         weeks before the selected gameweek will be considered.
+
+    window: (=10) int
+        The number of gameweeks to consider when fitting the model up to the given gameweek.
 
     Returns
     -------
@@ -359,18 +362,15 @@ def fit_model_up_to_round(data,gameweek=1):
 
     params = np.ones(41)
     params[-1] = 0.
-    if gameweek<10:
+    if gameweek<window:
         train = data.loc[data['Gameweek'] <= gameweek, :]
     else:
-        train = data.loc[(data['Gameweek'] <= gameweek)&(data['Gameweek'] > gameweek - 10), :]
+        train = data.loc[(data['Gameweek'] <= gameweek)&(data['Gameweek'] > gameweek - window), :]
     res = compute_parameters(train,params_guess=params,n_teams=20,zeta=0.)
-    try:
-        alphas,betas,gamma,rho = res
-        return alphas,betas,gamma,rho
-    except:
-        return res
+    alphas,betas,gamma,rho = res
+    return alphas,betas,gamma,rho
 
-def fit_model_season(data):
+def fit_model_season(data,window=10):
 
     """
     Fit the model for the whole season, computing the parameters for each gameweek. Note 
@@ -382,6 +382,10 @@ def fit_model_season(data):
 
     data: pandas.DataFrame
         The data.
+
+    window: (=10) int
+        The number of previous gameweeks to consider when fitting the model up 
+        to a given gameweek.
 
     Returns
     -------
@@ -414,10 +418,10 @@ def fit_model_season(data):
 
     for i in np.arange(1,37):
         if i==1:
-            alpha_tot[0,:],beta_tot[0,:],gamma_tot[0],rho_tot[0] = fit_model_up_to_round(data)
+            alpha_tot[0,:],beta_tot[0,:],gamma_tot[0],rho_tot[0] = fit_model_up_to_round(data,window=window)
         else:
             try:
-                alpha_tot[i-1,:],beta_tot[i-1,:],gamma_tot[i-1],rho_tot[i-1] = fit_model_up_to_round(data,gameweek=i)
+                alpha_tot[i-1,:],beta_tot[i-1,:],gamma_tot[i-1],rho_tot[i-1] = fit_model_up_to_round(data,gameweek=i,window=window)
             except:
                 alpha_tot[i-1,:],beta_tot[i-1,:],gamma_tot[i-1],rho_tot[i-1] = alpha_tot[i-2,:],beta_tot[i-2,:],gamma_tot[i-2],rho_tot[i-2]
 
@@ -626,7 +630,7 @@ def compute_zeta(data,zeta = np.linspace(0.,0.015,20) ):
     results[x==y] = 1 
     results[x<y] = 2
 
-    unique_dates = np.unique(data.index.values)[20::20]
+    unique_dates = np.unique(data.index.values)[20:]
     lnprob = np.zeros_like(zeta)
 
     for i,zi in enumerate(zeta):
