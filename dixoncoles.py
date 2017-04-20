@@ -32,8 +32,12 @@ def process_raw_data(raw,filestr='data/PL_2015-16.csv'):
         away goals."""
 
     raw.loc[:,'Date'] = pd.to_datetime(raw.loc[:,'Date'],dayfirst=True)
-    raw.rename(columns={'FTHG':'HomeGoals','FTAG':'AwayGoals'},inplace=True)
-    raw = raw[['Date','HomeTeam','AwayTeam','HomeGoals','AwayGoals']]
+    raw.rename(columns={'FTHG':'HomeGoals','FTAG':'AwayGoals','B365H':'BookiesHomeWin',\
+                        'B365D':'BookiesDraw', 'B365A':'BookiesAwayWin'},inplace=True)
+    raw = raw[['Date','HomeTeam','AwayTeam','HomeGoals','AwayGoals','BookiesHomeWin','BookiesDraw','BookiesAwayWin']]
+    raw.loc[:,'BookiesHomeWin'] = 1./raw['BookiesHomeWin']
+    raw.loc[:,'BookiesDraw'] = 1./raw['BookiesDraw']
+    raw.loc[:,'BookiesAwayWin'] = 1./raw['BookiesAwayWin']
     raw = raw.set_index('Date')
     if filestr is not None: raw.to_csv(filestr)
 
@@ -671,8 +675,82 @@ def compute_zeta(data,zeta = np.linspace(0.,0.015,20) ):
     
     return zeta,lnprob
 
+def calculate_odds(data,zeta=0.003):
 
+    """
+    Given some data and an optimal value of zeta, compute and store the 
+    predicted probabilities of home wins, draws and away wins for each 
+    match. The first twenty game days are only used to fit the model: 
+    predictions are not made for these because the model is too uncertain 
+    with such a small quantity of data.
 
+    Arguments
+    ---------
+
+    data: pandas.DataFrame
+        The data.
+
+    zeta: (=0.003) float
+        The zeta value to use when fitting the model on a given day.
+
+    Returns
+    -------
+
+    data: pandas.DataFrame
+        The data, with four new columns (ProbHomeWin,ProbDraw,ProbAwayWin,Result).
+        The result column takes values 0 (home win), 1 (draw), 2 (away win).
+
+    """
+
+    unique_dates = np.unique(data.index.values)[20:]
+
+    results = np.ones(len(data)).astype(int)
+    x = data['HomeGoals'].values
+    y = data['AwayGoals'].values 
+    results[x>y] = 0
+    results[x==y] = 1 
+    results[x<y] = 2
+
+    home_probs = np.zeros(len(data))
+    draw_probs = np.zeros(len(data))
+    away_probs = np.zeros(len(data))
+    for date in unique_dates:
+        thisdate = data.index==date
+        training_thisdate = data.loc[data.index<date,:]
+        try:
+            params_guess = np.append(np.append(np.hstack((a[:19],b)),g),r)
+        except:
+            params_guess = np.ones(41)
+            params_guess[-1] = 0.
+        a,b,g,r = compute_parameters(training_thisdate,params_guess=params_guess,n_teams=20,date=date,zeta=zeta)
+        hometeams_thisdate = data['HomeTeam'].iloc[thisdate].values
+        awayteams_thisdate = data['AwayTeam'].iloc[thisdate].values
+        results_thisdate = results[thisdate]
+        home_probs_thisdate = np.zeros(results_thisdate.shape)
+        draw_probs_thisdate = np.zeros(results_thisdate.shape)
+        away_probs_thisdate = np.zeros(results_thisdate.shape)
+        a_home = np.array(a[hometeams_thisdate])
+        a_away = np.array(a[awayteams_thisdate])
+        b_home = np.array(b[hometeams_thisdate])
+        b_away = np.array(b[awayteams_thisdate])
+        for j in np.arange(len(hometeams_thisdate)):
+            home_probs_thisdate[j],draw_probs_thisdate[j],away_probs_thisdate[j] = result_probabilities(a_home[j],\
+                                                                                    a_away[j],b_home[j],b_away[j],g,r)
+        home_probs[thisdate] = home_probs_thisdate
+        draw_probs[thisdate] = draw_probs_thisdate
+        away_probs[thisdate] = away_probs_thisdate
+
+    ind = home_probs==0.
+    home_probs[ind] = np.nan
+    draw_probs[ind] = np.nan
+    away_probs[ind] = np.nan
+    
+    data.loc[:,'ProbHomeWin'] = pd.Series(home_probs,index=data.index)
+    data.loc[:,'ProbDraw'] = pd.Series(draw_probs,index=data.index)
+    data.loc[:,'ProbAwayWin'] = pd.Series(away_probs,index=data.index)
+    data.loc[:,'Result'] = pd.Series(results,index=data.index)
+
+    return data
 
 
 
