@@ -10,7 +10,7 @@ sns.set_style()
 
 from scipy.optimize import minimize
 from scipy.misc import factorial
-from multiprocessing import pool
+from scipy.special import binom
 
 def process_raw_data(raw,filestr='data/PL_2015-16.csv'):
 
@@ -697,6 +697,7 @@ def model(x,y,alpha_i,alpha_j,beta_i,beta_j,gamma,rho):
 
     return correlations*np.exp(-lambda_k)*lambda_k**x*np.exp(-mu_k)*mu_k**y / (factorial(x)*factorial(y))
 
+
 def result_probabilities(alpha_i,alpha_j,beta_i,beta_j,gamma,rho):
 
     """
@@ -748,6 +749,70 @@ def result_probabilities(alpha_i,alpha_j,beta_i,beta_j,gamma,rho):
     home_win = np.sum(probs[x>y])
     away_win = np.sum(probs[x<y])
     draw = np.sum(probs[x==y])
+
+    return home_win,draw,away_win
+
+def shot_model_result_probabilities(alpha_i,alpha_j,beta_i,beta_j,epsilon_i,epsilon_j,gamma):
+
+    """
+    The probabilities of home wins, draws and away wins given a set of 
+    model parameters in the extended model. These are computed by summing 
+    over shots on target to compute the probability of the home (away) team 
+    scoring x (y) goals, and then summing the appropriate elements (e.g. 
+    a home win probability is obtained by summing the elements where x>y). 
+    This function is not vectorized.
+    
+
+    Arguments
+    ---------
+
+    alpha_i: float
+        Home team attacking indices.
+
+    alpha_j: float
+        Away team attacking indices.
+
+    beta_i: float
+        Home team defending indices.
+
+    beta_j: float
+        Away team defending indices.
+
+    epsilon_i: float
+        Home team shot to goal conversion efficiency.
+
+    epsilon_j: float
+        Away team shot to goal conversion efficiency.
+
+    gamma: float
+        Home team advantage parameter.    
+
+    Returns
+    -------
+
+    home_win: float
+        The predicted probability of a home win.
+
+    draw: float
+        The predicted probability of a draw.
+
+    away_win: float
+        The predicted probability of an away win.
+
+    """
+
+    lambda_k = alpha_i*beta_j*gamma
+    mu_k = alpha_j*beta_i
+    goal_range = np.arange(0,20)
+    shot_range = np.arange(0,30)
+    g,s = np.meshgrid(goal_range,shot_range,indexing='ij')
+    pr_x = np.sum( binom(s,g)*epsilon_i**g*(1.-epsilon_i)**(s-g) * np.exp(-lambda_k)*lambda_k**s / factorial(s) , axis=1)
+    pr_y = np.sum( binom(s,g)*epsilon_j**g*(1.-epsilon_j)**(s-g) * np.exp(-mu_k)*mu_k**s / factorial(s) , axis=1)
+    pr_xy = np.outer(pr_x,pr_y)
+    x,y = np.meshgrid(goal_range,goal_range,indexing='ij')
+    home_win = np.sum(pr_xy[x>y])
+    draw = np.sum(pr_xy[x==y])
+    away_win = np.sum(pr_xy[x<y])
 
     return home_win,draw,away_win
 
