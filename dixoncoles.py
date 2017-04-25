@@ -14,7 +14,9 @@ from scipy.special import binom
 
 def process_raw_data(raw,filestr='data/PL_2015-16.csv'):
 
-    """Data downloaded from http://www.football-data.co.uk/englandm.php
+    """
+
+    Data downloaded from http://www.football-data.co.uk/englandm.php
 
     Arguments
     ---------
@@ -30,7 +32,9 @@ def process_raw_data(raw,filestr='data/PL_2015-16.csv'):
 
     data: pandas.DataFrame
         The data indexed by date and with columns for home and away teams, home and 
-        away goals."""
+        away goals.
+
+    """
 
     raw.loc[:,'Date'] = pd.to_datetime(raw.loc[:,'Date'],dayfirst=True)
     raw.rename(columns={'FTHG':'HomeGoals','FTAG':'AwayGoals','B365H':'BookiesHomeWin',\
@@ -491,7 +495,7 @@ def compute_parameters(data,model='basic',params_guess=None,n_teams=20,date=None
         bnds = bnds_ab + bnds_epsilon + bnds_gamma
 
         res = minimize(log_likelihood_shotsontarget, params_guess, args=(data,n_teams,zeta,date), jac=jacobian_shotsontarget, \
-                method='SLSQP', bounds=bnds, constraints=cons, options={'maxiter': 500})
+                method='SLSQP', bounds=bnds, constraints=cons, options={'ftol':1e-11, 'maxiter': 500.})
 
         if res.success != True:
             Exception('Failed to optimize the model.')
@@ -855,7 +859,7 @@ def result_likelihood(results,home_prob,draw_prob,away_prob):
 
     return np.sum(lnprob)
 
-def compute_zeta(data,zeta = np.linspace(0.,0.015,20) ):
+def compute_zeta(data,zeta = np.linspace(0.,0.015,20), model='basic' ):
 
     """
     Given some data, calculate the predictive log-likelihood for a 
@@ -870,8 +874,13 @@ def compute_zeta(data,zeta = np.linspace(0.,0.015,20) ):
     data: pandas.DataFrame
         The data. 
 
-    zeta = (= numpy.linspace(0.,0.015,20) ) array_like
+    zeta: (= numpy.linspace(0.,0.015,20) ) array_like
         Range of zeta values to consider. 
+
+    model: string
+        The name of the model to fit. Either 'basic' for the 
+        original Dixon & Coles model, or 'shots' for my extension 
+        that models shots on target.
 
     Returns
     -------
@@ -902,27 +911,53 @@ def compute_zeta(data,zeta = np.linspace(0.,0.015,20) ):
         draw_probs = np.zeros(results.shape)
         away_probs = np.zeros(results.shape)
         for date in unique_dates:
+
             thisdate = data.index==date
             training_thisdate = data.loc[data.index<date,:]
+
             try:
-                params_guess = np.append(np.append(np.hstack((a[:19],b)),g),r)
+                if model == 'basic':
+                    params_guess = np.append(np.append(np.hstack((a[:19],b)),g),r)
+                elif model == 'shots':
+                    params_guess = np.append(np.hstack((a[:19],b,e)),g)
             except:
-                params_guess = np.ones(41)
-                params_guess[-1] = 0.
-            a,b,g,r = compute_parameters(training_thisdate,params_guess=params_guess,n_teams=20,date=date,zeta=zi)
+                if model == 'basic':
+                    params_guess = np.ones(41)
+                    params_guess[-1] = 0.
+                elif model == 'shots':
+                    params_guess = np.ones(3*20)
+                    params_guess[2*20 - 1: 3*20 - 1] = 0.2
+
+            if model == 'basic':
+                a,b,g,r = compute_parameters(training_thisdate,model='basic',params_guess=params_guess,n_teams=20,date=date,zeta=zi)
+            elif model == 'shots':
+                a,b,e,g = compute_parameters(training_thisdate,model='shots',params_guess=params_guess,n_teams=20,date=date,zeta=zi)
+
             hometeams_thisdate = data['HomeTeam'].iloc[thisdate].values
             awayteams_thisdate = data['AwayTeam'].iloc[thisdate].values
             results_thisdate = results[thisdate]
             home_probs_thisdate = np.zeros(results_thisdate.shape)
             draw_probs_thisdate = np.zeros(results_thisdate.shape)
             away_probs_thisdate = np.zeros(results_thisdate.shape)
+
             a_home = np.array(a[hometeams_thisdate])
             a_away = np.array(a[awayteams_thisdate])
             b_home = np.array(b[hometeams_thisdate])
             b_away = np.array(b[awayteams_thisdate])
-            for j in np.arange(len(hometeams_thisdate)):
-                home_probs_thisdate[j],draw_probs_thisdate[j],away_probs_thisdate[j] = result_probabilities(a_home[j],\
-                                                                                        a_away[j],b_home[j],b_away[j],g,r)
+
+            if model == 'shots':
+                e_home = np.array(e[hometeams_thisdate])
+                e_away = np.array(e[awayteams_thisdate])
+
+            if model == 'basic':
+                for j in np.arange(len(hometeams_thisdate)):
+                    home_probs_thisdate[j],draw_probs_thisdate[j],away_probs_thisdate[j] = result_probabilities(a_home[j],\
+                                                                                            a_away[j],b_home[j],b_away[j],g,r)
+            elif model == 'shots':
+                for j in np.arange(len(hometeams_thisdate)):
+                    home_probs_thisdate[j],draw_probs_thisdate[j],away_probs_thisdate[j] = shot_model_result_probabilities(a_home[j],\
+                                                                                            a_away[j],b_home[j],b_away[j],e_home[j],e_away[j],g)
+
             home_probs[thisdate] = home_probs_thisdate
             draw_probs[thisdate] = draw_probs_thisdate
             away_probs[thisdate] = away_probs_thisdate
@@ -932,7 +967,7 @@ def compute_zeta(data,zeta = np.linspace(0.,0.015,20) ):
     
     return zeta,lnprob
 
-def calculate_odds(data,zeta=0.003):
+def calculate_odds(data,zeta=0.003,model='basic'):
 
     """
     Given some data and an optimal value of zeta, compute and store the 
@@ -949,6 +984,11 @@ def calculate_odds(data,zeta=0.003):
 
     zeta: (=0.003) float
         The zeta value to use when fitting the model on a given day.
+
+    model: string
+        The name of the model to fit. Either 'basic' for the 
+        original Dixon & Coles model, or 'shots' for my extension 
+        that models shots on target.
 
     Returns
     -------
@@ -972,27 +1012,52 @@ def calculate_odds(data,zeta=0.003):
     draw_probs = np.zeros(len(data))
     away_probs = np.zeros(len(data))
     for date in unique_dates:
+
         thisdate = data.index==date
         training_thisdate = data.loc[data.index<date,:]
+
         try:
-            params_guess = np.append(np.append(np.hstack((a[:19],b)),g),r)
+            if model == 'basic':
+                params_guess = np.append(np.append(np.hstack((a[:19],b)),g),r)
+            elif model == 'shots':
+                params_guess = np.append(np.hstack((a[:19],b,e)),g)
         except:
-            params_guess = np.ones(41)
-            params_guess[-1] = 0.
-        a,b,g,r = compute_parameters(training_thisdate,params_guess=params_guess,n_teams=20,date=date,zeta=zeta)
+            if model == 'basic':
+                params_guess = np.ones(41)
+                params_guess[-1] = 0.
+            elif model == 'shots':
+                params_guess = np.ones(3*20)
+                params_guess[2*20 - 1: 3*20 - 1] = 0.2
+
+        if model == 'basic':
+            a,b,g,r = compute_parameters(training_thisdate,model='basic',params_guess=params_guess,n_teams=20,date=date,zeta=zeta)
+        elif model == 'shots':
+            a,b,e,g = compute_parameters(training_thisdate,model='shots',params_guess=params_guess,n_teams=20,date=date,zeta=zeta)
+
         hometeams_thisdate = data['HomeTeam'].iloc[thisdate].values
         awayteams_thisdate = data['AwayTeam'].iloc[thisdate].values
         results_thisdate = results[thisdate]
         home_probs_thisdate = np.zeros(results_thisdate.shape)
         draw_probs_thisdate = np.zeros(results_thisdate.shape)
         away_probs_thisdate = np.zeros(results_thisdate.shape)
+
         a_home = np.array(a[hometeams_thisdate])
         a_away = np.array(a[awayteams_thisdate])
         b_home = np.array(b[hometeams_thisdate])
         b_away = np.array(b[awayteams_thisdate])
-        for j in np.arange(len(hometeams_thisdate)):
-            home_probs_thisdate[j],draw_probs_thisdate[j],away_probs_thisdate[j] = result_probabilities(a_home[j],\
-                                                                                    a_away[j],b_home[j],b_away[j],g,r)
+
+        if model == 'shots':
+                e_home = np.array(e[hometeams_thisdate])
+                e_away = np.array(e[awayteams_thisdate])
+
+        if model == 'basic':
+            for j in np.arange(len(hometeams_thisdate)):
+                home_probs_thisdate[j],draw_probs_thisdate[j],away_probs_thisdate[j] = result_probabilities(a_home[j],\
+                                                                                            a_away[j],b_home[j],b_away[j],g,r)
+        elif model == 'shots':
+            for j in np.arange(len(hometeams_thisdate)):
+                home_probs_thisdate[j],draw_probs_thisdate[j],away_probs_thisdate[j] = shot_model_result_probabilities(a_home[j],\
+                                                                                            a_away[j],b_home[j],b_away[j],e_home[j],e_away[j],g)
         home_probs[thisdate] = home_probs_thisdate
         draw_probs[thisdate] = draw_probs_thisdate
         away_probs[thisdate] = away_probs_thisdate
