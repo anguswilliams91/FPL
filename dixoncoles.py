@@ -976,6 +976,9 @@ def calculate_odds(data,zeta=0.003,model='basic'):
     predictions are not made for these because the model is too uncertain 
     with such a small quantity of data.
 
+    TODO: store model parameters on each gameday and return arrays with values 
+    so sliding window stuff no longer necessary.
+
     Arguments
     ---------
 
