@@ -1,6 +1,7 @@
 from __future__ import division, print_function
 import warnings
 import os
+import itertools
 
 import pandas as pd 
 import numpy as np 
@@ -1077,5 +1078,38 @@ def calculate_odds(data,zeta=0.003,model='basic'):
 
     return data
 
+def simulate_match(alpha_i,alpha_j,beta_i,beta_j,epsilon_i,epsilon_j,gamma):
 
+    q = np.random.poisson(lam=alpha_i*beta_j*gamma)
+    r = np.random.poisson(lam=alpha_j*beta_i)
+    x = np.random.binomial(q,epsilon_i)
+    y = np.random.binomial(r,epsilon_j)
 
+    return q,r,x,y
+
+def simulate_season(alpha,beta,epsilon,gamma):
+
+    teams = np.arange(len(alpha))
+
+    match_ups = itertools.combinations(teams,2)
+    team_1 = []
+    team_2 = [] 
+
+    for match in match_ups:
+        team_1.append(match[0])
+        team_2.append(match[1])
+
+    home_teams = team_1 + team_2
+    away_teams = team_2 + team_1
+
+    alpha_i = alpha[home_teams]
+    alpha_j = alpha[away_teams]
+    beta_i = beta[home_teams]
+    beta_j = beta[away_teams]
+    epsilon_i = epsilon[home_teams]
+    epsilon_j = epsilon[away_teams]
+
+    q,r,x,y = simulate_match(alpha_i,alpha_j,beta_i,beta_j,epsilon_i,epsilon_j,gamma)
+
+    return pd.DataFrame({'HomeTeam':home_teams, 'AwayTeam':away_teams, 'HomeST': q, 'AwayST': r,\
+                            'HomeGoals': x, 'AwayGoals': y})
