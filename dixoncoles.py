@@ -1080,6 +1080,49 @@ def calculate_odds(data,zeta=0.003,model='basic'):
 
 def simulate_match(alpha_i,alpha_j,beta_i,beta_j,epsilon_i,epsilon_j,gamma):
 
+    """
+    Simulate a match (or series of matches) given the shots model.
+
+    Arguments
+    ---------
+
+    alpha_i: float or array_like
+        Home team attacking indices.
+
+    alpha_j: float or array_like
+        Away team attacking indices.
+
+    beta_i: float or array_like
+        Home team defending indices.
+
+    beta_j: float or array_like
+        Away team defending indices.
+
+    epsilon_i: float or array_like
+        Home team shot to goal conversion efficiency.
+
+    epsilon_j: float or array_like
+        Away team shot to goal conversion efficiency.
+
+    gamma: float or array_like
+        Home team advantage parameter.
+
+    Returns
+    -------
+
+    q: float or array_like
+        The number of shots on target achieved by the home team.
+
+    r: float or array_like
+        The number of shots on target achieved by the away team.
+
+    x: float or array_like
+        The number of goals scored by the home team.
+
+    y: float or array_like
+        The number of goals scored by the away team.  
+    """
+
     q = np.random.poisson(lam=alpha_i*beta_j*gamma)
     r = np.random.poisson(lam=alpha_j*beta_i)
     x = np.random.binomial(q,epsilon_i)
@@ -1088,6 +1131,35 @@ def simulate_match(alpha_i,alpha_j,beta_i,beta_j,epsilon_i,epsilon_j,gamma):
     return q,r,x,y
 
 def simulate_season(alpha,beta,epsilon,gamma):
+
+    """
+    Simulate a season using the shots model where each team plays against every other team twice.
+
+    Arguments
+    ---------
+
+    alpha: array_like
+        The attack parameters for each team.
+
+    beta: array_like
+        The defence parameters for each team.
+
+    epsilon: array_like
+        The shot to goal conversion efficiencies.
+
+    gamma: float
+        The home advantage parameter.
+
+    Returns
+    -------
+
+    results: pandas.DataFrame
+        A dataframe with columns 'HomeTeam', 'AwayTeam' (integers such 
+        that 'HomeTeam' = i corresponds to the team whose attacking 
+        parameter is alpha[i]), 'HomeST', 'AwayST' (shots on target), 
+        'HomeGoals' and 'AwayGoals'.
+        
+    """
 
     teams = np.arange(len(alpha))
 
