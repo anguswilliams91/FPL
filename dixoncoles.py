@@ -471,7 +471,7 @@ def compute_parameters(data,model='basic',params_guess=None,n_teams=20,date=None
                 method='SLSQP', bounds=bnds, constraints=cons, options={'maxiter': 200})
 
         if res.success != True:
-            Exception('Failed to optimize the model.')
+            raise Exception('Failed to optimize the model.')
 
         alphas = res.x[:n_teams - 1]
         alphas = np.append(alphas, n_teams - np.sum(alphas))
@@ -499,7 +499,7 @@ def compute_parameters(data,model='basic',params_guess=None,n_teams=20,date=None
                 method='SLSQP', bounds=bnds, constraints=cons, options={'ftol':1e-11, 'maxiter': 500.})
 
         if res.success != True:
-            Exception('Failed to optimize the model.')
+            raise Exception('Failed to optimize the model.')
 
         alphas = res.x[:n_teams - 1]
         alphas = np.append(alphas, n_teams - np.sum(alphas))
@@ -1158,7 +1158,7 @@ def simulate_season(alpha,beta,epsilon,gamma):
         that 'HomeTeam' = i corresponds to the team whose attacking 
         parameter is alpha[i]), 'HomeST', 'AwayST' (shots on target), 
         'HomeGoals' and 'AwayGoals'.
-        
+
     """
 
     teams = np.arange(len(alpha))
