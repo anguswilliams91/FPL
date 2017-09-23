@@ -1,6 +1,7 @@
 from __future__ import division, print_function
 import warnings
 import os
+import itertools
 
 import pandas as pd 
 import numpy as np 
@@ -471,7 +472,7 @@ def compute_parameters(data,model='basic',params_guess=None,n_teams=20,date=None
                 method='SLSQP', bounds=bnds, constraints=cons, options={'maxiter': 200})
 
         if res.success != True:
-            Exception('Failed to optimize the model.')
+            raise Exception('Failed to optimize the model.')
 
         alphas = res.x[:n_teams - 1]
         alphas = np.append(alphas, n_teams - np.sum(alphas))
@@ -499,7 +500,7 @@ def compute_parameters(data,model='basic',params_guess=None,n_teams=20,date=None
                 method='SLSQP', bounds=bnds, constraints=cons, options={'ftol':1e-11, 'maxiter': 500.,'iprint':True, 'eps': 1e-3})
 
         if res.success != True:
-            Exception('Failed to optimize the model.')
+            raise Exception('Failed to optimize the model.')
 
         alphas = res.x[:n_teams - 1]
         alphas = np.append(alphas, n_teams - np.sum(alphas))
@@ -977,6 +978,9 @@ def calculate_odds(data,zeta=0.003,model='basic'):
     predictions are not made for these because the model is too uncertain 
     with such a small quantity of data.
 
+    TODO: store model parameters on each gameday and return arrays with values 
+    so sliding window stuff no longer necessary.
+
     Arguments
     ---------
 
@@ -1075,5 +1079,110 @@ def calculate_odds(data,zeta=0.003,model='basic'):
 
     return data
 
+def simulate_match(alpha_i,alpha_j,beta_i,beta_j,epsilon_i,epsilon_j,gamma):
 
+    """
+    Simulate a match (or series of matches) given the shots model.
 
+    Arguments
+    ---------
+
+    alpha_i: float or array_like
+        Home team attacking indices.
+
+    alpha_j: float or array_like
+        Away team attacking indices.
+
+    beta_i: float or array_like
+        Home team defending indices.
+
+    beta_j: float or array_like
+        Away team defending indices.
+
+    epsilon_i: float or array_like
+        Home team shot to goal conversion efficiency.
+
+    epsilon_j: float or array_like
+        Away team shot to goal conversion efficiency.
+
+    gamma: float or array_like
+        Home team advantage parameter.
+
+    Returns
+    -------
+
+    q: float or array_like
+        The number of shots on target achieved by the home team.
+
+    r: float or array_like
+        The number of shots on target achieved by the away team.
+
+    x: float or array_like
+        The number of goals scored by the home team.
+
+    y: float or array_like
+        The number of goals scored by the away team.  
+    """
+
+    q = np.random.poisson(lam=alpha_i*beta_j*gamma)
+    r = np.random.poisson(lam=alpha_j*beta_i)
+    x = np.random.binomial(q,epsilon_i)
+    y = np.random.binomial(r,epsilon_j)
+
+    return q,r,x,y
+
+def simulate_season(alpha,beta,epsilon,gamma):
+
+    """
+    Simulate a season using the shots model where each team plays against every other team twice.
+
+    Arguments
+    ---------
+
+    alpha: array_like
+        The attack parameters for each team.
+
+    beta: array_like
+        The defence parameters for each team.
+
+    epsilon: array_like
+        The shot to goal conversion efficiencies.
+
+    gamma: float
+        The home advantage parameter.
+
+    Returns
+    -------
+
+    results: pandas.DataFrame
+        A dataframe with columns 'HomeTeam', 'AwayTeam' (integers such 
+        that 'HomeTeam' = i corresponds to the team whose attacking 
+        parameter is alpha[i]), 'HomeST', 'AwayST' (shots on target), 
+        'HomeGoals' and 'AwayGoals'.
+
+    """
+
+    teams = np.arange(len(alpha))
+
+    match_ups = itertools.combinations(teams,2)
+    team_1 = []
+    team_2 = [] 
+
+    for match in match_ups:
+        team_1.append(match[0])
+        team_2.append(match[1])
+
+    home_teams = team_1 + team_2
+    away_teams = team_2 + team_1
+
+    alpha_i = alpha[home_teams]
+    alpha_j = alpha[away_teams]
+    beta_i = beta[home_teams]
+    beta_j = beta[away_teams]
+    epsilon_i = epsilon[home_teams]
+    epsilon_j = epsilon[away_teams]
+
+    q,r,x,y = simulate_match(alpha_i,alpha_j,beta_i,beta_j,epsilon_i,epsilon_j,gamma)
+
+    return pd.DataFrame({'HomeTeam':home_teams, 'AwayTeam':away_teams, 'HomeST': q, 'AwayST': r,\
+                            'HomeGoals': x, 'AwayGoals': y})
