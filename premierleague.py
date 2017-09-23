@@ -7,8 +7,8 @@ from adjustText import adjust_text
 
 def load_data():
     #Load the data for the PL season 2016/17
-    data = pd.read_csv('../data/PL_2016_17.csv')
-    prior_data = pd.read_csv('../data/mcnulty_predictions.csv')
+    data = pd.read_csv('data/PL_2016_17.csv')
+    prior_data = pd.read_csv('data/mcnulty_predictions.csv')
     teams = np.unique(data['HomeTeam'].values)
     for i,team in enumerate(teams):
         home_idx = data['HomeTeam'] == team 
