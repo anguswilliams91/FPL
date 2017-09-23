@@ -12,7 +12,7 @@ from scipy.optimize import minimize
 from scipy.misc import factorial
 from scipy.special import binom
 
-def process_raw_data(raw,filestr='data/PL_2015-16.csv'):
+def process_raw_data(raw,filestr='../data/PL_2015-16.csv'):
 
     """
 
@@ -70,7 +70,7 @@ def load_and_preprocess():
 
     """
 
-    data = pd.read_csv("data/PL_2015-16.csv")
+    data = pd.read_csv("../data/PL_2015-16.csv")
     teams = pd.unique(data['HomeTeam'])
     for i,team in enumerate(teams):
         home_idx = data['HomeTeam'] == team 
@@ -232,6 +232,7 @@ def log_likelihood_shotsontarget(params,data,n_teams=20,zeta=0.003,date=None):
 
     """
 
+    print(params)
     alphas = params[: n_teams-1 ]
     betas = params[n_teams-1 : 2*n_teams - 1]
     epsilons = params[2*n_teams - 1: 3*n_teams - 1]
@@ -495,7 +496,7 @@ def compute_parameters(data,model='basic',params_guess=None,n_teams=20,date=None
         bnds = bnds_ab + bnds_epsilon + bnds_gamma
 
         res = minimize(log_likelihood_shotsontarget, params_guess, args=(data,n_teams,zeta,date), jac=jacobian_shotsontarget, \
-                method='SLSQP', bounds=bnds, constraints=cons, options={'ftol':1e-11, 'maxiter': 500.})
+                method='SLSQP', bounds=bnds, constraints=cons, options={'ftol':1e-11, 'maxiter': 500.,'iprint':True, 'eps': 1e-3})
 
         if res.success != True:
             Exception('Failed to optimize the model.')
@@ -507,7 +508,7 @@ def compute_parameters(data,model='basic',params_guess=None,n_teams=20,date=None
         epsilons = res.x[2*n_teams - 1: 3*n_teams - 1]
         gamma = res.x[-1]
 
-        return alphas,betas,epsilons,gamma
+        return res
 
 
 def fit_model_up_to_round(data,model='basic',gameweek=1,window=10):
