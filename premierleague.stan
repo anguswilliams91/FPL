@@ -7,20 +7,20 @@ data {
     int away_st[ngames];
     int home_team[ngames];
     int away_team[ngames];
-    int mcnulty_rank[nteams];
+    vector[nteams] mcnulty_rank;
 }
 transformed data {
-    real normalised_rank[nteams];
+    vector[nteams] normalised_rank;
     int home_total_st[ngames];
     int away_total_st[ngames];
-    for (i in 1:nteams) normalised_rank[i] = 2*((1. - mcnulty_rank[i])/19. + 0.5);
+    normalised_rank = 2*((1. - mcnulty_rank)/19. + 0.5);
     for (i in 1:ngames) home_total_st[i] = home_st[i] + home_goals[i];
     for (i in 1:ngames) away_total_st[i] = away_st[i] + away_goals[i];
 }
 parameters {
-    real<lower=0> a[nteams];
-    real<lower=0> b[nteams];
-    real<lower=0, upper=1> f[nteams];
+    vector<lower=0>[nteams] a;
+    vector<lower=0>[nteams] b;
+    vector<lower=0, upper=1>[nteams] f;
     real<lower=0> gamma;
     real corr_a;
     real corr_b;
@@ -32,11 +32,9 @@ parameters {
     real<lower=0, upper=1> mu_f;
 }
 model {
-    for (i in 1:nteams){
-        a[i] ~ normal(1 + corr_a*normalised_rank[i], sigma_a);
-        b[i] ~ normal(mu_b + corr_b*normalised_rank[i], sigma_b);
-        f[i] ~ normal(mu_f + corr_f*normalised_rank[i], sigma_f);
-        }
+    a ~ normal(1 + corr_a*normalised_rank, sigma_a);
+    b ~ normal(mu_b + corr_b*normalised_rank, sigma_b);
+    f ~ normal(mu_f + corr_f*normalised_rank, sigma_f);
     gamma ~ normal(1.1, 0.3);
     corr_a ~ normal(0, 1);
     corr_b ~ normal(0, 1);

@@ -1,0 +1,41 @@
+name: fpl
+channels:
+- defaults
+dependencies:
+- ca-certificates=2017.08.26=ha1e5d58_0
+- certifi=2017.7.27.1=py35h0fdde5e_0
+- cycler=0.10.0=py35hb89929e_0
+- freetype=2.8=h143eb01_0
+- intel-openmp=2018.0.0=h68bdfb3_7
+- libcxx=4.0.1=h579ed51_0
+- libcxxabi=4.0.1=hebd6815_0
+- libedit=3.1=hb4e282d_0
+- libffi=3.2.1=h475c297_4
+- libgfortran=3.0.1=h93005f0_2
+- libpng=1.6.32=h6184301_3
+- matplotlib=2.1.0=py35hc2166d4_0
+- mkl=2018.0.0=h5ef208c_6
+- ncurses=6.0=hd04f020_2
+- numpy=1.13.3=py35hfd7066c_0
+- openssl=1.0.2m=h86d3e6a_0
+- pandas=0.21.0=py35h4431f20_1
+- pip=9.0.1=py35h33ce766_4
+- pyparsing=2.2.0=py35h31fab04_0
+- python=3.5.4=he720263_23
+- python-dateutil=2.6.1=py35h10515e0_1
+- pytz=2017.2=py35h9789cde_1
+- readline=7.0=hc1231fa_4
+- setuptools=36.5.0=py35h52cde6a_0
+- six=1.11.0=py35h39a4c60_1
+- sqlite=3.20.1=h7e4c145_2
+- tk=8.6.7=h35a86e2_3
+- tornado=4.5.2=py35h4099233_0
+- wheel=0.29.0=py35ha7aa5c4_1
+- xz=5.2.3=h0278029_2
+- zlib=1.2.11=hf3cbc9b_2
+- pip:
+  - adjusttext==0.6.1
+  - cython==0.27.3
+  - pystan==2.17.0.0
+prefix: /anaconda3/envs/fpl
+
